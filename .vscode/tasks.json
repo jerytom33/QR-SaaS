@@ -1,0 +1,52 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "move-root-markdown-to-docs",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"New-Item -ItemType Directory -Path .\\documentation -Force | Out-Null; Get-ChildItem -Path . -File -Filter *.md | Where-Object { $_.Name -ne 'README.md' } | Move-Item -Destination .\\documentation -Force"
+			],
+			"isBackground": false,
+			"group": "none"
+		},
+		{
+			"label": "list-root-markdown",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Get-ChildItem -Path . -File -Filter *.md | Select-Object -ExpandProperty Name"
+			],
+			"isBackground": false,
+			"group": "none"
+		},
+		{
+			"label": "move-root-markdown-abs",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"New-Item -ItemType Directory -Path 'E:\\QR SaaS\\documentation' -Force | Out-Null; Get-ChildItem -Path 'E:\\QR SaaS' -File -Filter *.md | Where-Object { $_.Name -ne 'README.md' } | Move-Item -Destination 'E:\\QR SaaS\\documentation' -Force"
+			],
+			"isBackground": false,
+			"group": "none"
+		},
+		{
+			"label": "move-markdown-cmd",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"if not exist documentation mkdir documentation && for %f in (*.md) do @if /I not \"%~nxf\"==\"README.md\" move /Y \"%f\" \"documentation\\\""
+			],
+			"isBackground": false,
+			"group": "none"
+		}
+	]
+}

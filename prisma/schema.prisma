@@ -1,0 +1,494 @@
+// Multi-Tenant CRM SAAS Platform Schema
+// Enterprise-grade with strict tenant isolation and QR authentication
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Tenancy Management
+model Tenant {
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  domain           String?  @unique
+  status           TenantStatus @default(ACTIVE)
+  plan             SubscriptionPlan @default(FREE)
+  maxUsers         Int      @default(5)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  // Relations
+  profiles         Profile[]
+  contacts         Contact[]
+  companies        Company[]
+  leads            Lead[]
+  pipelines        Pipeline[]
+  apiKeys          ApiKey[]
+  qrSessions       QRSession[]
+  linkedDevices    LinkedDevice[]
+  files            File[]           // Phase 3.3: File management
+  storageQuota     StorageQuota?    // Phase 3.3: Storage quota
+  fileShares       FileShare[]      // Phase 3.3: File shares
+  fileAuditLogs    FileAuditLog[]   // Phase 3.3: Audit logs
+  
+  @@map("tenants")
+}
+
+// User Profiles linked to Tenants
+model Profile {
+  id           String   @id @default(cuid())
+  userId       String   @unique // This would link to auth.users in production
+  email        String
+  name         String?
+  avatar       String?
+  role         UserRole @default(USER)
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Foreign Keys
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  linkedDevices LinkedDevice[]
+  
+  @@map("profiles")
+}
+
+// QR Sessions for device linking
+model QRSession {
+  id           String       @id @default(cuid())
+  status       QRStatus     @default(PENDING)
+  qrCodeData   String       // The actual QR code content
+  expiresAt    DateTime
+  linkedToken  String?      // Long-lived refresh token
+  deviceInfo   String?      // Device info when linked
+  provider     QRProvider   @default(LOCAL)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  
+  // Foreign Keys
+  tenantId     String
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@map("qr_sessions")
+}
+
+// Linked Devices for persistent sessions
+model LinkedDevice {
+  id                   String   @id @default(cuid())
+  deviceInfo           String   // e.g., "Chrome on Windows 11"
+  hashedRefreshToken   String   // Hashed long-lived token
+  lastUsedAt           DateTime @default(now())
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  // Foreign Keys
+  userId               String
+  user                 Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId             String
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@map("linked_devices")
+}
+
+// CRM Core Entities
+model Contact {
+  id            String   @id @default(cuid())
+  firstName     String
+  lastName      String
+  email         String?
+  phone         String?
+  avatar        String?
+  title         String?
+  department    String?
+  notes         String?
+  tags          String?  // JSON array of tags
+  customFields  String?  // JSON object for custom fields
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Foreign Keys
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  companyId     String?
+  company       Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  
+  // Relations
+  activities    Activity[]
+  leads         Lead[]
+  
+  @@map("contacts")
+}
+
+model Company {
+  id            String   @id @default(cuid())
+  name          String
+  domain        String?  @unique
+  industry      String?
+  size          String?  // e.g., "50-100", "1000+"
+  website       String?
+  phone         String?
+  address       String?
+  city          String?
+  state         String?
+  country       String?
+  postalCode    String?
+  notes         String?
+  tags          String?  // JSON array of tags
+  customFields  String?  // JSON object for custom fields
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Foreign Keys
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  contacts      Contact[]
+  
+  @@map("companies")
+}
+
+model Lead {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  value         Float?   // Deal value
+  currency      String   @default("USD")
+  status        LeadStatus @default(NEW)
+  priority      Priority @default(MEDIUM)
+  source        String?  // Lead source
+  tags          String?  // JSON array of tags
+  customFields  String?  // JSON object for custom fields
+  expectedCloseDate DateTime?
+  actualCloseDate   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Foreign Keys
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactId     String?
+  contact       Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  pipelineId    String
+  pipeline      Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stageId       String
+  stage         PipelineStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  assignedTo    String?  // Profile ID
+  
+  // Relations
+  activities    Activity[]
+  
+  @@map("leads")
+}
+
+model Pipeline {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Foreign Keys
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  stages      PipelineStage[]
+  leads       Lead[]
+  
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String?  // Hex color for UI
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Foreign Keys
+  pipelineId  String
+  pipeline    Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  leads       Lead[]
+  
+  @@map("pipeline_stages")
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  title       String
+  description String?
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  // Foreign Keys
+  tenantId    String
+  contactId   String?
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  leadId      String?
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo  String?      // Profile ID
+  createdBy   String       // Profile ID
+  
+  @@map("activities")
+}
+
+// API Keys for external integrations
+model ApiKey {
+  id          String   @id @default(cuid())
+  name        String   // User-friendly name
+  keyHash     String   // Hashed API key
+  keyPrefix   String   // First few characters for identification
+  permissions String?  // JSON array of permissions
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Foreign Keys
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy   String   // Profile ID
+  
+  @@map("api_keys")
+}
+
+// File Management - Phase 3.3
+model File {
+  id              String           @id @default(cuid())
+  filename        String           // Original filename
+  storagePath     String           // Path in storage provider (s3://bucket/key)
+  mimeType        String           // e.g., "application/pdf"
+  size            BigInt           // File size in bytes
+  
+  // Virus Scanning
+  virusScanStatus VirusScanStatus  @default(PENDING)
+  virusScanResult String?          // JSON with scan details
+  scannedAt       DateTime?        // When virus scan was completed
+  
+  // Image Optimization
+  isOptimized     Boolean          @default(false)
+  thumbnailPath   String?          // Path to thumbnail (150x150 WebP)
+  optimizedPath   String?          // Path to optimized version (1200x1200 WebP)
+  imageMetadata   String?          // JSON with width, height, format, hasAlpha
+  
+  // Entity Linking
+  entityType      String           // contact|lead|company|email|activity|document
+  entityId        String           // ID of the linked entity
+  
+  // Ownership & Visibility
+  uploadedBy      String           // Profile ID of uploader
+  isPublic        Boolean          @default(false)
+  downloadCount   Int              @default(0)
+  
+  // Soft Delete Support
+  deletedAt       DateTime?        // Soft delete timestamp
+  deletedBy       String?          // Profile ID of deleter
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  // Foreign Keys
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  shares          FileShare[]
+  auditLogs       FileAuditLog[]
+  
+  // Indexes for common queries
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([uploadedBy])
+  @@index([createdAt])
+  @@index([deletedAt])
+  
+  @@map("files")
+}
+
+// Storage Quota Tracking per Tenant
+model StorageQuota {
+  id              String   @id @default(cuid())
+  
+  // Usage tracking
+  totalUsageBytes BigInt   @default(0)      // Total storage used in bytes
+  fileCount       Int      @default(0)      // Number of non-deleted files
+  
+  // Limits (can be adjusted per plan)
+  limitBytes      BigInt                    // Maximum storage allowed
+  lastCalculatedAt DateTime @default(now()) // When usage was last calculated
+  
+  // Alerts
+  warningThreshold Int    @default(80)     // Alert when 80% full
+  isWarned        Boolean @default(false)  // Whether warning was sent
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Foreign Keys
+  tenantId        String   @unique         // One quota record per tenant
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@map("storage_quotas")
+}
+
+// File Sharing Permissions
+model FileShare {
+  id              String           @id @default(cuid())
+  
+  // Permission Levels
+  permission      FilePermission   @default(VIEW)
+  
+  // Share Details
+  sharedBy        String           // Profile ID who shared it
+  sharedWith      String           // Profile ID who it's shared with
+  shareToken      String?          // For anonymous/link sharing
+  shareSignature  String?          // Signature for signed URLs
+  
+  // Expiration
+  expiresAt       DateTime?        // Optional expiration date
+  isActive        Boolean          @default(true)
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  revokedAt       DateTime?        // When share was revoked
+  
+  // Foreign Keys
+  fileId          String
+  file            File             @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Indexes for common queries
+  @@unique([fileId, sharedWith])    // Can't share same file twice with same user
+  @@index([fileId])
+  @@index([sharedWith])
+  @@index([shareToken])
+  @@index([shareSignature])
+  @@index([expiresAt])
+  
+  @@map("file_shares")
+}
+
+// Audit Log for File Operations
+model FileAuditLog {
+  id              String   @id @default(cuid())
+  action          String   // UPLOAD, DOWNLOAD, DELETE, SHARE, UNSHARE
+  details         String?  // JSON with additional details
+  ipAddress       String?  // IP address of actor
+  userAgent       String?  // User agent string
+  
+  createdAt       DateTime @default(now())
+  
+  // Foreign Keys
+  fileId          String
+  file            File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actorId         String?  // Profile ID of who performed action
+  
+  @@index([tenantId])
+  @@index([fileId])
+  @@index([action])
+  @@index([createdAt])
+  
+  @@map("file_audit_logs")
+}
+
+// Enums
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  USER
+}
+
+enum QRStatus {
+  PENDING
+  SCANNED
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+enum QRProvider {
+  BAILEYS
+  LOCAL
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  MEETING
+  TASK
+  NOTE
+  DEMO
+  FOLLOW_UP
+}
+
+// File Management Enums (Phase 3.3)
+enum VirusScanStatus {
+  PENDING     // Awaiting scan
+  SCANNING    // Currently being scanned
+  CLEAN       // Scanned, no threats found
+  INFECTED    // Contains malware/virus
+  QUARANTINED // Dangerous but kept for analysis
+  ERROR       // Scan failed
+  SKIPPED     // Too large or type doesn't require scan
+}
+
+enum FilePermission {
+  VIEW        // Can download only
+  COMMENT     // Can download and add comments
+  EDIT        // Can download, update, and share
+  ADMIN       // Full control including deletion
+}

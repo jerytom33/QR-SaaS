@@ -1,0 +1,10 @@
+{
+  "filename": "empty.txt",
+  "mimeType": "text/plain",
+  "size": 0,
+  "tenantId": "tenant-123",
+  "userId": "user-456",
+  "entityType": "document",
+  "entityId": "doc-789",
+  "uploadedAt": "2025-11-02T18:45:00.059Z"
+}
