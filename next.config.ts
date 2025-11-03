@@ -10,8 +10,10 @@ const nextConfig: NextConfig = {
     // 构建时忽略ESLint错误
     ignoreDuringBuilds: true,
   },
-  // Use a custom distDir to avoid Windows file locking on .next/trace
-  distDir: ".next-dev",
+  // Standard .next directory for Vercel deployment
+  distDir: ".next",
+  // Output standalone for optimized deployment
+  output: "standalone",
   // Next 15+: expose native Node deps to the server runtime
   serverExternalPackages: [
     "@whiskeysockets/baileys",

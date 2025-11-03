@@ -1,0 +1,16 @@
+{
+  "buildCommand": "prisma generate && next build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "functions": {
+    "api/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "api/v1/auth/qr-session/stream/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  }
+}
