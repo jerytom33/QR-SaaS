@@ -1,16 +1,12 @@
-import path from 'path'
-import fs from 'fs'
-import os from 'os'
+import { useDatabaseAuthState } from './baileys-db-auth'
 
 // Lazy import baileys to avoid loading cost if not used
 let makeWASocket: any
-let useMultiFileAuthState: any
 
 async function loadBaileys() {
-  if (!makeWASocket || !useMultiFileAuthState) {
+  if (!makeWASocket) {
     const mod = await import('@whiskeysockets/baileys')
     makeWASocket = (mod as any).default || (mod as any).makeWASocket || (mod as any).makeWASocket
-    useMultiFileAuthState = (mod as any).useMultiFileAuthState
   }
 }
 
@@ -26,15 +22,8 @@ export async function getWhatsAppLoginQR(options: {
   await loadBaileys()
 
   const timeoutMs = options.timeoutMs ?? 5000
-  const baseAuthDir = options.authDir || path.join(process.cwd(), '.wa-auth')
-  const sessionDir = path.join(baseAuthDir, `session-${options.sessionId}`)
-
-  // Ensure directory exists (best-effort)
-  try {
-    fs.mkdirSync(sessionDir, { recursive: true })
-  } catch {}
-
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir)
+  // Use database-backed auth state (Vercel-compatible)
+  const { state, saveCreds } = await useDatabaseAuthState(options.sessionId)
 
   return new Promise<BaileysQRResult>((resolve, reject) => {
     let settled = false
@@ -94,11 +83,8 @@ export async function startWhatsAppQRStream(options: {
 }) {
   await loadBaileys()
 
-  const baseAuthDir = options.authDir || path.join(process.cwd(), '.wa-auth')
-  const sessionDir = path.join(baseAuthDir, `session-${options.sessionId}`)
-  try { fs.mkdirSync(sessionDir, { recursive: true }) } catch {}
-
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir)
+  // Use database-backed auth state (Vercel-compatible)
+  const { state, saveCreds } = await useDatabaseAuthState(options.sessionId)
   const sock = makeWASocket({
     printQRInTerminal: false,
     auth: state,

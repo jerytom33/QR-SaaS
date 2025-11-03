@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { whatsappConfig } from '@/lib/config'
 import { startWhatsAppQRStream } from '@/lib/qr/providers/baileys'
 import { renderQrDataUrl } from '@/lib/qr'
+import { triggerPusherEvent } from '@/lib/pusher/server'
 
 // Ensure Node.js runtime for ws/baileys compatibility
 export const runtime = 'nodejs'
@@ -56,6 +57,8 @@ export async function GET(
           onQR: async (qr: string) => {
             const dataUrl = await renderQrDataUrl(qr, { size: 300 })
             send('qr', { qrDataUrl: dataUrl })
+            // Also trigger Pusher event for clients not using SSE
+            await triggerPusherEvent(`qr-session-${qrSessionId}`, 'qr-updated', { qrDataUrl: dataUrl })
           },
           onOpen: async () => {
             try {
@@ -107,8 +110,10 @@ export async function GET(
                 },
               })
 
-              // Notify client immediately
+              // Notify client immediately via SSE
               send('linked', { status: 'COMPLETED' })
+              // Also notify via Pusher for clients not using SSE
+              await triggerPusherEvent(`qr-session-${qrSessionId}`, 'linked', { status: 'COMPLETED' })
             } catch (err) {
               // In case of error, let polling detect current state
             }
