@@ -4,11 +4,7 @@
   "framework": "nextjs",
   "regions": ["iad1"],
   "functions": {
-    "api/**/*.{js,ts}": {
-      "memory": 1024,
-      "maxDuration": 30
-    },
-    "api/v1/auth/qr-session/stream/**/*.{js,ts}": {
+    ".vercel/output/functions/**": {
       "memory": 1024,
       "maxDuration": 60
     }
