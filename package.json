@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "whatsapp:dev": "npm --prefix services/whatsapp-service run dev",
+    "whatsapp:start": "npm --prefix services/whatsapp-service run start",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
