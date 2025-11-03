@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-dev/
 /out/
 
 # production
@@ -48,5 +49,3 @@ prompt
 
 server.log
 .wa-auth/
-.next-dev/
-*.log
