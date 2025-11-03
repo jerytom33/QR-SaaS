@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { whatsappConfig } from '@/lib/config'
+import { logger } from '@/lib/logging'
 import { startWhatsAppQRStream } from '@/lib/qr/providers/baileys'
 import { renderQrDataUrl } from '@/lib/qr'
 import { triggerPusherEvent } from '@/lib/pusher/server'
@@ -47,7 +48,106 @@ export async function GET(
       }
 
       const provider = qrSession.provider || 'LOCAL'
-      if (provider === 'BAILEYS' && whatsappConfig.provider === 'baileys') {
+      if (whatsappConfig.provider === 'whatsapp-web-js' && whatsappConfig.serviceUrl) {
+        // Proxy SSE from the whatsapp-web.js microservice
+        try {
+          // Ensure session started upstream
+          await fetch(`${whatsappConfig.serviceUrl}/sessions/${qrSessionId}/start`, { method: 'POST' })
+
+          // Connect to upstream SSE
+          const upstream = await fetch(`${whatsappConfig.serviceUrl}/sessions/${qrSessionId}/qr`)
+          if (!upstream.ok || !upstream.body) {
+            throw new Error('Failed to connect upstream SSE')
+          }
+
+          const reader = upstream.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+
+          // Forward chunks and parse events to update DB on 'linked'
+          const pump = async (): Promise<void> => {
+            const { value, done } = await reader.read()
+            if (done) { safeClose('upstream_done'); return }
+            const chunk = decoder.decode(value, { stream: true })
+            buffer += chunk
+
+            // Parse complete SSE events split by blank line
+            let idx: number
+            while ((idx = buffer.indexOf('\n\n')) !== -1) {
+              const rawEvent = buffer.slice(0, idx)
+              buffer = buffer.slice(idx + 2)
+              try {
+                const lines = rawEvent.split('\n')
+                const ev = lines.find(l => l.startsWith('event: '))?.slice(7).trim()
+                const dataLine = lines.find(l => l.startsWith('data: '))?.slice(6)
+                if (ev && dataLine) {
+                  // Forward to client
+                  send(ev, JSON.parse(dataLine))
+
+                  if (ev === 'linked') {
+                    // Mark session completed and create linked device (similar to Baileys onOpen)
+                    try {
+                      const current = await db.qRSession.findUnique({ where: { id: qrSessionId } })
+                      if (!current) { continue }
+                      if (new Date() > current.expiresAt) { safeClose('expired'); continue }
+
+                      const { v4: uuidv4 } = await import('uuid')
+                      const refreshToken = uuidv4() + '-' + Date.now()
+                      const hashedToken = Buffer.from(refreshToken).toString('base64')
+
+                      let profile = await db.profile.findFirst({ where: { email: 'demo@crmflow.com' } })
+                      if (!profile) {
+                        profile = await db.profile.create({
+                          data: {
+                            userId: uuidv4(),
+                            email: 'demo@crmflow.com',
+                            name: 'Demo User',
+                            role: 'TENANT_ADMIN',
+                            tenantId: current.tenantId,
+                          },
+                        })
+                      }
+
+                      await db.linkedDevice.create({
+                        data: {
+                          userId: profile.id,
+                          tenantId: current.tenantId,
+                          deviceInfo: 'WhatsApp Device',
+                          hashedRefreshToken: hashedToken,
+                          lastUsedAt: new Date(),
+                        },
+                      })
+
+                      await db.qRSession.update({
+                        where: { id: qrSessionId },
+                        data: { status: 'COMPLETED', linkedToken: refreshToken, deviceInfo: 'WhatsApp Device' },
+                      })
+                    } catch (e) {
+                      logger.warn({ err: e }, 'Failed to finalize session on whatsapp-web-js linked')
+                    }
+                  }
+                } else {
+                  // Comment or heartbeat, forward as-is
+                  controller.enqueue(encoder.encode(rawEvent + '\n\n'))
+                }
+              } catch {
+                // ignore parse errors
+              }
+            }
+
+            // Keep forwarding raw bytes for any partials as heartbeat
+            controller.enqueue(encoder.encode(chunk))
+            await pump()
+          }
+
+          pump()
+          return
+        } catch (e) {
+          send('status', { message: 'Failed to connect WhatsApp service' })
+          safeClose('service_error')
+          return
+        }
+      } else if (provider === 'BAILEYS' && whatsappConfig.provider === 'baileys') {
         // Send initial connecting message
         send('status', { message: 'Connecting to WhatsApp...' })
         

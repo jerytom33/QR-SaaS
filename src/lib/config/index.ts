@@ -27,7 +27,7 @@ const envSchema = z.object({
   QR_SESSION_EXPIRES_IN: z.string().default('5m'),
   QR_CODE_SIZE: z.coerce.number().default(256),
   // WhatsApp QR Provider
-  WA_QR_PROVIDER: z.enum(['baileys', 'local']).default('baileys'),
+  WA_QR_PROVIDER: z.enum(['baileys', 'local', 'whatsapp-web-js']).default('baileys'),
   WA_QR_TIMEOUT_MS: z.coerce.number().default(15000),
   WA_AUTH_DIR: z.string().default('./.wa-auth'),
   
@@ -137,6 +137,7 @@ export const whatsappConfig = {
   provider: config.WA_QR_PROVIDER,
   timeoutMs: config.WA_QR_TIMEOUT_MS,
   authDir: config.WA_AUTH_DIR,
+  serviceUrl: process.env.WHATSAPP_SERVICE_URL || '',
 };
 
 // API configuration

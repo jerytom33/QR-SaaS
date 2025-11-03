@@ -16,7 +16,7 @@ export async function generatePreferredQrImage(params: {
   sessionId: string
   payloadIfLocal: any
   size?: number
-}): Promise<{ dataUrl: string; provider: 'baileys' | 'local' }> {
+}): Promise<{ dataUrl: string; provider: 'baileys' | 'local' | 'whatsapp-web-js' }> {
   const { sessionId, payloadIfLocal, size } = params
 
   // For Baileys: return a placeholder immediately
@@ -30,6 +30,17 @@ export async function generatePreferredQrImage(params: {
     })
     const dataUrl = await renderQrDataUrl(placeholderText, { size })
     return { dataUrl, provider: 'baileys' }
+  }
+
+  // For whatsapp-web.js service: return placeholder and stream via SSE
+  if (whatsappConfig.provider === 'whatsapp-web-js') {
+    const placeholderText = JSON.stringify({
+      type: 'whatsapp-web-js-placeholder',
+      sessionId,
+      message: 'Connecting to WhatsApp...'
+    })
+    const dataUrl = await renderQrDataUrl(placeholderText, { size })
+    return { dataUrl, provider: 'whatsapp-web-js' }
   }
 
   // Fallback: local QR content

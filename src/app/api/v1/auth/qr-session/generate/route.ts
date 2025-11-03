@@ -61,7 +61,8 @@ export async function POST(request: NextRequest) {
         expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
         deviceInfo: deviceInfo || 'Unknown Device',
         tenantId: tenant.id,
-        provider: preferred.provider === 'baileys' ? 'BAILEYS' : 'LOCAL'
+  // Persist legacy enum while UI/client uses preferred.provider; stream route uses global config
+  provider: preferred.provider === 'baileys' ? 'BAILEYS' : 'LOCAL'
       }
     })
 
