@@ -104,12 +104,13 @@ model LinkedDevice {
 // Stores authentication state in database instead of filesystem
 model BaileysAuthState {
   id          String   @id @default(cuid())
-  sessionId   String   @unique // QR session ID
+  sessionId   String   // QR session ID
   keyType     String   // 'creds', 'app-state-sync-key-*', 'app-state-sync-version-*', 'sender-key-*', etc.
   keyData     Json     // The actual key/state data from Baileys
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
+  @@unique([sessionId, keyType])
   @@index([sessionId])
   @@index([keyType])
   @@map("baileys_auth_states")
