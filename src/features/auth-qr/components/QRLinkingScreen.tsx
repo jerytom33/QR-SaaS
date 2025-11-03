@@ -238,12 +238,6 @@ export default function QRLinkingScreen({ onSuccess }: { onSuccess: (token: stri
                   alt="QR Code for device linking"
                   className="w-full h-full object-contain p-2"
                 />
-                {qrData.provider === 'baileys' && (
-                  <div className="absolute bottom-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                    WhatsApp
-                  </div>
-                )}
               </>
             ) : (
               <div className="text-slate-500">
